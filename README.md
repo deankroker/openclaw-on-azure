@@ -10,7 +10,6 @@ Deploy [OpenClaw](https://github.com/openclaw) on Azure Virtual Machine Scale Se
 
 - **Dedicated VM** per user — full SSH access, no shared tenancy
 - **Key Vault secrets** — API keys stored once, shared across all instances via managed identity
-- **NSG locked to your IP** — deploy auto-detects your IP and restricts inbound traffic
 - **30 GB persistent OS disk** — survives VM restarts and stop/start cycles (suggest having OpenCode write to Notion. Otherwise, set up snapshots/disk storage)
 - **~$30/month** for a dev instance (`Standard_B2s`)
 
