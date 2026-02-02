@@ -1,0 +1,6 @@
+{
+  "members": [
+    { "email": "alice@contoso.com" },
+    { "email": "bob@contoso.com" }
+  ]
+}

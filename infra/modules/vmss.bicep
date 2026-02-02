@@ -10,8 +10,11 @@ param instanceCount int = 1
 @description('VM size')
 param vmSize string = 'Standard_B2s'
 
-@description('SSH public key')
-param sshPublicKey string
+@description('SSH public key (optional — if empty, SSH key auth is skipped)')
+param sshPublicKey string = ''
+
+@description('Entra ID object IDs to grant Virtual Machine User Login role')
+param vmUserLoginObjectIds array = []
 
 @description('Admin username')
 param adminUsername string = 'openclaw'
@@ -57,7 +60,7 @@ resource vmss 'Microsoft.Compute/virtualMachineScaleSets@2024-07-01' = {
         linuxConfiguration: {
           disablePasswordAuthentication: true
           ssh: {
-            publicKeys: [
+            publicKeys: empty(sshPublicKey) ? [] : [
               {
                 path: '/home/${adminUsername}/.ssh/authorized_keys'
                 keyData: sshPublicKey
@@ -139,6 +142,33 @@ resource kvRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' =
 resource keyVaultRef 'Microsoft.KeyVault/vaults@2024-11-01' existing = {
   name: keyVaultName
 }
+
+// Entra ID SSH login extension (only when team members are configured)
+resource aadExtension 'Microsoft.Compute/virtualMachineScaleSets/extensions@2024-07-01' = if (!empty(vmUserLoginObjectIds)) {
+  parent: vmss
+  name: 'AADSSHLoginForLinux'
+  properties: {
+    publisher: 'Microsoft.Azure.ActiveDirectory'
+    type: 'AADSSHLoginForLinux'
+    typeHandlerVersion: '1.0'
+    autoUpgradeMinorVersion: true
+  }
+}
+
+// Grant Virtual Machine User Login role to each team member
+var vmUserLoginRole = 'fb879df8-f326-4884-b1cf-06f3ad86be52'
+
+resource vmUserRoleAssignments 'Microsoft.Authorization/roleAssignments@2022-04-01' = [
+  for (objectId, i) in vmUserLoginObjectIds: {
+    name: guid(vmss.id, objectId, vmUserLoginRole)
+    scope: vmss
+    properties: {
+      roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', vmUserLoginRole)
+      principalId: objectId
+      principalType: 'User'
+    }
+  }
+]
 
 output vmssName string = vmss.name
 output vmssId string = vmss.id

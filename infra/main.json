@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.40.2.10011",
-      "templateHash": "9216077854761013332"
+      "templateHash": "15806924535313151637"
     }
   },
   "parameters": {
@@ -39,8 +39,16 @@
     },
     "sshPublicKey": {
       "type": "string",
+      "defaultValue": "",
       "metadata": {
-        "description": "SSH public key for VM access"
+        "description": "SSH public key for VM access (optional — if empty, SSH key auth is skipped)"
+      }
+    },
+    "vmUserLoginObjectIds": {
+      "type": "array",
+      "defaultValue": [],
+      "metadata": {
+        "description": "Entra ID object IDs to grant Virtual Machine User Login role"
       }
     },
     "adminUsername": {
@@ -408,6 +416,9 @@
           "sshPublicKey": {
             "value": "[parameters('sshPublicKey')]"
           },
+          "vmUserLoginObjectIds": {
+            "value": "[parameters('vmUserLoginObjectIds')]"
+          },
           "adminUsername": {
             "value": "[parameters('adminUsername')]"
           },
@@ -434,7 +445,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.40.2.10011",
-              "templateHash": "14813499300409213172"
+              "templateHash": "1700748372681778377"
             }
           },
           "parameters": {
@@ -467,8 +478,16 @@
             },
             "sshPublicKey": {
               "type": "string",
+              "defaultValue": "",
               "metadata": {
-                "description": "SSH public key"
+                "description": "SSH public key (optional — if empty, SSH key auth is skipped)"
+              }
+            },
+            "vmUserLoginObjectIds": {
+              "type": "array",
+              "defaultValue": [],
+              "metadata": {
+                "description": "Entra ID object IDs to grant Virtual Machine User Login role"
               }
             },
             "adminUsername": {
@@ -515,7 +534,8 @@
             "namePrefix": "[format('openclaw-{0}', parameters('environment'))]",
             "cloudInitRaw": "#cloud-config\npackage_update: true\npackage_upgrade: true\n\nwrite_files:\n  - path: /opt/openclaw/setup.sh\n    permissions: \"0755\"\n    content: |\n      #!/bin/bash\n      set -euo pipefail\n      exec > /var/log/openclaw-setup.log 2>&1\n      echo \"=== OpenClaw setup started at $(date) ===\"\n\n      ADMIN_USER=\"{0}\"\n      OPENCLAW_PORT=\"{1}\"\n      KV_NAME=\"{2}\"\n      HOME_DIR=\"/home/$ADMIN_USER\"\n\n      # Install Node.js 22 via NodeSource\n      echo \"Installing Node.js 22...\"\n      curl -fsSL https://deb.nodesource.com/setup_22.x | bash -\n      apt-get install -y nodejs\n\n      # Install pnpm globally\n      echo \"Installing pnpm...\"\n      npm install -g pnpm\n\n      # Install Azure CLI\n      echo \"Installing Azure CLI...\"\n      curl -sL https://aka.ms/InstallAzureCLIDeb | bash\n\n      # Install Claude Code CLI\n      echo \"Installing Claude Code CLI...\"\n      npm install -g @anthropic-ai/claude-code\n\n      # Authenticate with managed identity\n      echo \"Authenticating with managed identity...\"\n      az login --identity\n\n      # Wait for Key Vault RBAC propagation (can take 1-5 min)\n      echo \"Waiting for Key Vault access...\"\n      MAX_RETRIES=30\n      RETRY_INTERVAL=10\n      for i in $(seq 1 $MAX_RETRIES); do\n        if az keyvault secret show --vault-name \"$KV_NAME\" --name \"openclaw-secrets\" > /dev/null 2>&1; then\n          echo \"Key Vault access confirmed on attempt $i\"\n          break\n        fi\n        if [ \"$i\" -eq \"$MAX_RETRIES\" ]; then\n          echo \"ERROR: Could not access Key Vault after $MAX_RETRIES attempts\"\n          exit 1\n        fi\n        echo \"Attempt $i/$MAX_RETRIES - waiting $RETRY_INTERVAL seconds...\"\n        sleep $RETRY_INTERVAL\n      done\n\n      # Pull secrets from Key Vault\n      echo \"Pulling secrets from Key Vault...\"\n      mkdir -p \"$HOME_DIR/.openclaw/credentials\"\n      az keyvault secret show --vault-name \"$KV_NAME\" --name \"openclaw-secrets\" --query \"value\" -o tsv > \"$HOME_DIR/.openclaw/credentials/secrets.json\"\n\n      # Install OpenClaw\n      echo \"Installing OpenClaw...\"\n      npm install -g openclaw@latest\n\n      # Write OpenClaw config\n      echo \"Writing OpenClaw config...\"\n      cat > \"$HOME_DIR/.openclaw/openclaw.json\" << 'OCEOF'\n      {{\n        \"gateway\": {{\n          \"bind\": \"0.0.0.0:{1}\"\n        }},\n        \"model\": {{\n          \"provider\": \"anthropic\",\n          \"name\": \"claude-sonnet-4-20250514\"\n        }},\n        \"channels\": []\n      }}\n      OCEOF\n\n      # Fix ownership\n      chown -R \"$ADMIN_USER:$ADMIN_USER\" \"$HOME_DIR/.openclaw\"\n\n      # Create systemd user service\n      echo \"Creating systemd service...\"\n      SYSTEMD_DIR=\"$HOME_DIR/.config/systemd/user\"\n      mkdir -p \"$SYSTEMD_DIR\"\n      cat > \"$SYSTEMD_DIR/openclaw-gateway.service\" << 'SVCEOF'\n      [Unit]\n      Description=OpenClaw Gateway\n      After=network-online.target\n      Wants=network-online.target\n\n      [Service]\n      Type=simple\n      ExecStart=/usr/bin/openclaw gateway run\n      Restart=always\n      RestartSec=5\n      Environment=NODE_ENV=production\n\n      [Install]\n      WantedBy=default.target\n      SVCEOF\n\n      chown -R \"$ADMIN_USER:$ADMIN_USER\" \"$HOME_DIR/.config\"\n\n      # Enable linger for user service to start at boot\n      loginctl enable-linger \"$ADMIN_USER\"\n\n      # Enable and start the service as the admin user\n      sudo -u \"$ADMIN_USER\" XDG_RUNTIME_DIR=\"/run/user/$(id -u $ADMIN_USER)\" systemctl --user daemon-reload\n      sudo -u \"$ADMIN_USER\" XDG_RUNTIME_DIR=\"/run/user/$(id -u $ADMIN_USER)\" systemctl --user enable openclaw-gateway\n      sudo -u \"$ADMIN_USER\" XDG_RUNTIME_DIR=\"/run/user/$(id -u $ADMIN_USER)\" systemctl --user start openclaw-gateway\n\n      echo \"=== OpenClaw setup completed at $(date) ===\"\n\nruncmd:\n  - bash /opt/openclaw/setup.sh\n",
             "cloudInitFormatted": "[format(variables('cloudInitRaw'), parameters('adminUsername'), string(parameters('openclawPort')), parameters('keyVaultName'))]",
-            "keyVaultSecretsUserRole": "4633458b-17de-408a-b874-0445c86b69e6"
+            "keyVaultSecretsUserRole": "4633458b-17de-408a-b874-0445c86b69e6",
+            "vmUserLoginRole": "fb879df8-f326-4884-b1cf-06f3ad86be52"
           },
           "resources": [
             {
@@ -541,12 +561,7 @@
                     "linuxConfiguration": {
                       "disablePasswordAuthentication": true,
                       "ssh": {
-                        "publicKeys": [
-                          {
-                            "path": "[format('/home/{0}/.ssh/authorized_keys', parameters('adminUsername'))]",
-                            "keyData": "[parameters('sshPublicKey')]"
-                          }
-                        ]
+                        "publicKeys": "[if(empty(parameters('sshPublicKey')), createArray(), createArray(createObject('path', format('/home/{0}/.ssh/authorized_keys', parameters('adminUsername')), 'keyData', parameters('sshPublicKey'))))]"
                       }
                     },
                     "customData": "[base64(variables('cloudInitFormatted'))]"
@@ -615,6 +630,39 @@
                 "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('keyVaultSecretsUserRole'))]",
                 "principalId": "[reference(resourceId('Microsoft.Compute/virtualMachineScaleSets', format('{0}-vmss', variables('namePrefix'))), '2024-07-01', 'full').identity.principalId]",
                 "principalType": "ServicePrincipal"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Compute/virtualMachineScaleSets', format('{0}-vmss', variables('namePrefix')))]"
+              ]
+            },
+            {
+              "condition": "[not(empty(parameters('vmUserLoginObjectIds')))]",
+              "type": "Microsoft.Compute/virtualMachineScaleSets/extensions",
+              "apiVersion": "2024-07-01",
+              "name": "[format('{0}/{1}', format('{0}-vmss', variables('namePrefix')), 'AADSSHLoginForLinux')]",
+              "properties": {
+                "publisher": "Microsoft.Azure.ActiveDirectory",
+                "type": "AADSSHLoginForLinux",
+                "typeHandlerVersion": "1.0",
+                "autoUpgradeMinorVersion": true
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Compute/virtualMachineScaleSets', format('{0}-vmss', variables('namePrefix')))]"
+              ]
+            },
+            {
+              "copy": {
+                "name": "vmUserRoleAssignments",
+                "count": "[length(parameters('vmUserLoginObjectIds'))]"
+              },
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2022-04-01",
+              "scope": "[resourceId('Microsoft.Compute/virtualMachineScaleSets', format('{0}-vmss', variables('namePrefix')))]",
+              "name": "[guid(resourceId('Microsoft.Compute/virtualMachineScaleSets', format('{0}-vmss', variables('namePrefix'))), parameters('vmUserLoginObjectIds')[copyIndex()], variables('vmUserLoginRole'))]",
+              "properties": {
+                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('vmUserLoginRole'))]",
+                "principalId": "[parameters('vmUserLoginObjectIds')[copyIndex()]]",
+                "principalType": "User"
               },
               "dependsOn": [
                 "[resourceId('Microsoft.Compute/virtualMachineScaleSets', format('{0}-vmss', variables('namePrefix')))]"

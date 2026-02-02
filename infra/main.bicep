@@ -12,8 +12,11 @@ param instanceCount int = 1
 @description('VM size')
 param vmSize string = 'Standard_B2s'
 
-@description('SSH public key for VM access')
-param sshPublicKey string
+@description('SSH public key for VM access (optional — if empty, SSH key auth is skipped)')
+param sshPublicKey string = ''
+
+@description('Entra ID object IDs to grant Virtual Machine User Login role')
+param vmUserLoginObjectIds array = []
 
 @description('Admin username for VMs')
 param adminUsername string = 'openclaw'
@@ -67,6 +70,7 @@ module vmss 'modules/vmss.bicep' = {
     instanceCount: instanceCount
     vmSize: vmSize
     sshPublicKey: sshPublicKey
+    vmUserLoginObjectIds: vmUserLoginObjectIds
     adminUsername: adminUsername
     openclawPort: openclawPort
     subnetId: network.outputs.subnetId

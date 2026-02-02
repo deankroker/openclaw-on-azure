@@ -17,6 +17,7 @@ RESOURCE_GROUP="${RESOURCE_GROUP:-openclaw-rg}"
 LOCATION="${LOCATION:-eastus2}"
 SSH_KEY_PATH="${SSH_KEY_PATH:-$HOME/.ssh/id_rsa.pub}"
 SECRETS_FILE="${SECRETS_FILE:-$PROJECT_ROOT/secrets.json}"
+TEAM_FILE="${TEAM_FILE:-$PROJECT_ROOT/team.json}"
 ADMIN_USERNAME="${ADMIN_USERNAME:-openclaw}"
 
 # Set subscription if specified
@@ -55,4 +56,14 @@ get_instance_ips() {
     return 1
   fi
   az vmss list-instance-public-ips -g "$RESOURCE_GROUP" -n "$vmss_name" --query "[].ipAddress" -o tsv
+}
+
+get_instance_names() {
+  local vmss_name
+  vmss_name=$(get_vmss_name)
+  if [[ -z "$vmss_name" ]]; then
+    echo "ERROR: No VMSS found in resource group $RESOURCE_GROUP"
+    return 1
+  fi
+  az vmss list-instances -g "$RESOURCE_GROUP" -n "$vmss_name" --query "[].name" -o tsv
 }
