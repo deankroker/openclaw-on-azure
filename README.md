@@ -201,4 +201,3 @@ Deletes the entire resource group and all resources within it.
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md).
-# openclaw-on-azure
