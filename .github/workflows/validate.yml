@@ -1,0 +1,26 @@
+name: Validate Bicep
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  validate:
+    name: Build & Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Azure CLI - Bicep Build
+        uses: azure/cli@v2
+        with:
+          inlineScript: |
+            az bicep build --file infra/main.bicep
+
+      - name: Azure CLI - Bicep Lint
+        uses: azure/cli@v2
+        with:
+          inlineScript: |
+            az bicep lint --file infra/main.bicep

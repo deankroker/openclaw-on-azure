@@ -1,0 +1,10 @@
+{
+  "gateway": {
+    "bind": "0.0.0.0:18789"
+  },
+  "model": {
+    "provider": "anthropic",
+    "name": "claude-sonnet-4-20250514"
+  },
+  "channels": []
+}
